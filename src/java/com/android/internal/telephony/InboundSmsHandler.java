@@ -27,6 +27,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.SQLException;
@@ -45,6 +46,7 @@ import android.telephony.TelephonyManager;
 
 import com.android.internal.telephony.util.BlacklistUtils;
 import com.android.internal.telephony.PhoneBase;
+import com.android.internal.telephony.SmsReceiver;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -731,7 +733,7 @@ public abstract class InboundSmsHandler extends StateMachine {
 
         Intent intent;
         if (destPort == -1) {
-            intent = new Intent(Intents.SMS_DELIVER_ACTION);
+            intent = new Intent(Intents.SMS_RECEIVED_ACTION);
 
             // Direct the intent to only the default SMS app. If we can't find a default SMS app
             // then sent it to all broadcast receivers.
@@ -764,9 +766,45 @@ public abstract class InboundSmsHandler extends StateMachine {
      */
     protected void dispatchIntent(Intent intent, String permission, int appOp,
             BroadcastReceiver resultReceiver) {
-        intent.addFlags(Intent.FLAG_RECEIVER_NO_ABORT);
+        if (intent.getAction().equals(Intents.SMS_RECEIVED_ACTION)) {
+            registerSmsReceiver(mContext, intent.getComponent(), false);
+            intent.setComponent(null);
+        } else {
+            intent.addFlags(Intent.FLAG_RECEIVER_NO_ABORT);
+        }
         mContext.sendOrderedBroadcast(intent, permission, appOp, resultReceiver,
                 getHandler(), Activity.RESULT_OK, null, null);
+    }
+
+    private SmsReceiver smsReceiver;
+    private SmsReceiver mmsReceiver;
+    private void registerSmsReceiver(Context context, ComponentName componentName, boolean isMms) {
+        SmsReceiver receiver = isMms ? mmsReceiver : smsReceiver;
+        if (receiver != null) {
+            if (receiver.getComponentName().equals(componentName)) {
+                return;
+            }
+            context.unregisterReceiver(receiver);
+
+            if (isMms) {
+                mmsReceiver = null;
+            } else {
+                smsReceiver = null;
+            }
+        }
+
+        if (componentName == null) {
+            return;
+        }
+
+        receiver = new SmsReceiver(componentName);
+        context.registerReceiver(receiver, new IntentFilter(isMms
+                ? Intents.WAP_PUSH_RECEIVED_ACTION : Intents.SMS_RECEIVED_ACTION));
+        if (isMms) {
+            mmsReceiver = receiver;
+        } else {
+            smsReceiver = receiver;
+        }
     }
 
     /**
