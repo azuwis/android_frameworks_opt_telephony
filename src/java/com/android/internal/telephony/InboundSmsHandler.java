@@ -572,10 +572,10 @@ public abstract class InboundSmsHandler extends StateMachine {
      * @return {@link Intents#RESULT_SMS_HANDLED} if the message was accepted, or an error status
      */
     protected int dispatchNormalMessage(SmsMessageBase sms) {
-        // int blacklistResult = checkIfBlacklisted(sms);
-        // if (blacklistResult != Intents.RESULT_SMS_HANDLED) {
-        //     return blacklistResult;
-        // }
+        int blacklistResult = checkIfBlacklisted(sms);
+        if (blacklistResult != Intents.RESULT_SMS_HANDLED) {
+            return blacklistResult;
+        }
 
         SmsHeader smsHeader = sms.getUserDataHeader();
         InboundSmsTracker tracker;
